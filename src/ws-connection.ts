@@ -1,10 +1,10 @@
 import * as rpc from '@sourcegraph/vscode-ws-jsonrpc';
-import { ConsoleLogger } from '@sourcegraph/vscode-ws-jsonrpc';
+import {ConsoleLogger} from '@sourcegraph/vscode-ws-jsonrpc';
 import * as events from 'events';
 import * as lsProtocol from 'vscode-languageserver-protocol';
-import { LocationLink, ServerCapabilities } from 'vscode-languageserver-protocol';
-import { registerServerCapability, unregisterServerCapability } from './server-capability-registration';
-import { ILspConnection, ILspOptions, IPosition, ITokenInfo } from './types';
+import {LocationLink, ServerCapabilities} from 'vscode-languageserver-protocol';
+import {registerServerCapability, unregisterServerCapability} from './server-capability-registration';
+import {ILspConnection, ILspOptions, IPosition, ITokenInfo} from './types';
 
 interface IFilesServerClientCapabilities {
   /* ... all fields from the base ClientCapabilities ... */
@@ -18,6 +18,7 @@ interface IFilesServerClientCapabilities {
    */
   xcontentProvider?: boolean;
 }
+
 type ExtendedClientCapabilities = lsProtocol.ClientCapabilities & IFilesServerClientCapabilities;
 
 class LspWsConnection extends events.EventEmitter implements ILspConnection {
@@ -49,6 +50,10 @@ class LspWsConnection extends events.EventEmitter implements ILspConnection {
 
         this.connection = connection;
         this.sendInitialize();
+
+        setInterval(() => {
+          this.connection.sendNotification('PING', {});
+        }, 10000);
 
         this.connection.onNotification('textDocument/publishDiagnostics', (
           params: lsProtocol.PublishDiagnosticsParams,
@@ -99,6 +104,7 @@ class LspWsConnection extends events.EventEmitter implements ILspConnection {
     }
     this.socket.close();
   }
+
   public getDocumentUri() {
     return this.documentInfo.documentUri;
   }
@@ -181,14 +187,15 @@ class LspWsConnection extends events.EventEmitter implements ILspConnection {
         } as lsProtocol.TextDocumentItem,
       };
       this.connection.sendNotification('initialized');
-      this.connection.sendNotification('workspace/didChangeConfiguration', {
-        settings: {},
-      });
+      // this.connection.sendNotification('workspace/didChangeConfiguration', {
+      //   settings: {},
+      // });
       this.connection.sendNotification('textDocument/didOpen', textDocumentMessage);
       this.sendChange();
     }, (e) => {
     });
   }
+
   public changeConfig(info: any) {
     this.connection.sendNotification('workspace/didChangeConfiguration', {
       initializationOptions: info.initializationOptions,
@@ -204,6 +211,7 @@ class LspWsConnection extends events.EventEmitter implements ILspConnection {
     };
     this.connection.sendNotification('textDocument/didOpen', textDocumentMessage);
   }
+
   public sendChange() {
     if (!this.isConnected) {
       return;
@@ -225,17 +233,17 @@ class LspWsConnection extends events.EventEmitter implements ILspConnection {
     if (!this.isInitialized) {
       return;
     }
-    this.connection.sendRequest('textDocument/hover', {
-      textDocument: {
-        uri: this.documentInfo.documentUri,
-      },
-      position: {
-        line: location.line,
-        character: location.ch,
-      },
-    } as lsProtocol.TextDocumentPositionParams).then((params: lsProtocol.Hover) => {
-      this.emit('hover', params);
-    });
+    // this.connection.sendRequest('textDocument/hover', {
+    //   textDocument: {
+    //     uri: this.documentInfo.documentUri,
+    //   },
+    //   position: {
+    //     line: location.line,
+    //     character: location.ch,
+    //   },
+    // } as lsProtocol.TextDocumentPositionParams).then((params: lsProtocol.Hover) => {
+    //   this.emit('hover', params);
+    // });
   }
 
   public getCompletion(
