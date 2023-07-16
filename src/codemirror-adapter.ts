@@ -62,7 +62,24 @@ class CodeMirrorAdapter extends IEditorAdapter<CodeMirror.Editor> {
     }
   }
 
-  public handleChange(cm: CodeMirror.Editor, change: CodeMirror.EditorChange) {
+  public getCom() {
+    const location = this.editor.getDoc().getCursor('end');
+
+    const code = this.editor.getDoc().getValue();
+
+    this.connection.getCompletion(
+      location,
+      this.token,
+      '',
+      lsProtocol.CompletionTriggerKind.Invoked,
+      {
+        endOffset: code.length,
+        startOffset: 0,
+      },
+    );
+  }
+
+  public handleChange(cm: CodeMirror.Editor, change: CodeMirror.EditorChange, next: any) {
     const location = this.editor.getDoc().getCursor('end');
     this.connection.sendChange();
 
@@ -76,7 +93,7 @@ class CodeMirrorAdapter extends IEditorAdapter<CodeMirror.Editor> {
     if (typeof typedCharacter === 'undefined') {
       // Line was cleared
       this._removeSignatureWidget();
-    } else if (completionCharacters.indexOf(typedCharacter) > -1) {
+    } else if (completionCharacters.indexOf(typedCharacter) > -1 || next === 1) {
       this.token = this._getTokenEndingAtPosition(code, location, completionCharacters);
       this.connection.getCompletion(
         location,
@@ -87,7 +104,7 @@ class CodeMirrorAdapter extends IEditorAdapter<CodeMirror.Editor> {
     } else if (signatureCharacters.indexOf(typedCharacter) > -1) {
       this.token = this._getTokenEndingAtPosition(code, location, signatureCharacters);
       this.connection.getSignatureHelp(location);
-    } else if (!/\W/.test(typedCharacter)) {
+    } else if (!/\W/.test(typedCharacter) || next === 2) {
       this.connection.getCompletion(
         location,
         this.token,

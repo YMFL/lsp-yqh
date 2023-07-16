@@ -251,6 +251,7 @@ class LspWsConnection extends events.EventEmitter implements ILspConnection {
     token: ITokenInfo,
     triggerCharacter?: string,
     triggerKind?: lsProtocol.CompletionTriggerKind,
+    statementRange?: any,
   ) {
     if (!this.isConnected) {
       return;
@@ -258,26 +259,54 @@ class LspWsConnection extends events.EventEmitter implements ILspConnection {
     if (!(this.serverCapabilities && this.serverCapabilities.completionProvider)) {
       return;
     }
+    if (statementRange) {
+      this.connection.sendRequest('textDocument/completion', {
+        textDocument: {
+          uri: this.documentInfo.documentUri,
+        },
+        position: {
+          line: location.line,
+          character: location.ch,
+        },
+        context: {
+          triggerKind: triggerKind || lsProtocol.CompletionTriggerKind.Invoked,
+          statementRange,
+        },
+      } as lsProtocol.CompletionParams)
+        .then((params: lsProtocol.CompletionList | lsProtocol.CompletionItem[] | null) => {
 
-    this.connection.sendRequest('textDocument/completion', {
-      textDocument: {
-        uri: this.documentInfo.documentUri,
-      },
-      position: {
-        line: location.line,
-        character: location.ch,
-      },
-      context: {
-        triggerKind: triggerKind || lsProtocol.CompletionTriggerKind.Invoked,
-        triggerCharacter,
-      },
-    } as lsProtocol.CompletionParams).then((params: lsProtocol.CompletionList | lsProtocol.CompletionItem[] | null) => {
-      if (!params) {
-        this.emit('completion', params);
-        return;
-      }
-      this.emit('completion', 'items' in params ? params.items : params);
-    });
+          console.log(params);
+          if (!params) {
+            this.emit('completion', params);
+            return;
+          }
+          this.emit('completion', 'items' in params ? params.items : params);
+        });
+
+    } else {
+
+      this.connection.sendRequest('textDocument/completion', {
+        textDocument: {
+          uri: this.documentInfo.documentUri,
+        },
+        position: {
+          line: location.line,
+          character: location.ch,
+        },
+        context: {
+          triggerKind: triggerKind || lsProtocol.CompletionTriggerKind.Invoked,
+          triggerCharacter,
+        },
+      } as lsProtocol.CompletionParams)
+        .then((params: lsProtocol.CompletionList | lsProtocol.CompletionItem[] | null) => {
+          if (!params) {
+            this.emit('completion', params);
+            return;
+          }
+          this.emit('completion', 'items' in params ? params.items : params);
+        });
+    }
+
   }
 
   public getDetailedCompletion(completionItem: lsProtocol.CompletionItem) {
