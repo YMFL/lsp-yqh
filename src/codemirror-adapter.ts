@@ -15,6 +15,7 @@ class CodeMirrorAdapter extends IEditorAdapter<CodeMirror.Editor> {
   public options: ITextEditorOptions;
   public editor: CodeMirror.Editor;
   public connection: ILspConnection;
+  public completionCache: any[];
 
   private hoverMarker: CodeMirror.TextMarker;
   private signatureWidget: CodeMirror.LineWidget;
@@ -34,6 +35,7 @@ class CodeMirrorAdapter extends IEditorAdapter<CodeMirror.Editor> {
     this.connection = connection;
     this.options = getFilledDefaults(options);
     this.editor = editor;
+    this.completionCache = [];
 
     this.debouncedGetHover = debounce((position: IPosition) => {
       this.connection.getHoverTooltip(position);
@@ -89,6 +91,18 @@ class CodeMirrorAdapter extends IEditorAdapter<CodeMirror.Editor> {
     const lines = code.split('\n');
     const line = lines[location.line];
     const typedCharacter = line[location.ch - 1];
+
+    // 如果输入是分隔符，清空缓存
+    const splitCharacters = [' ', ';', ',', '.'];
+    if (splitCharacters.includes(typedCharacter) || !typedCharacter) {
+      this.completionCache = [];
+    }
+
+    this.token = this._getTokenEndingAtPosition(code, location, splitCharacters);
+
+    if (this.completionCache.some((c) => this._includeText(c.label, this.token.text))) {
+      return this.handleCompletion(this.completionCache);
+    }
 
     if (typeof typedCharacter === 'undefined') {
       // Line was cleared
@@ -178,12 +192,18 @@ class CodeMirrorAdapter extends IEditorAdapter<CodeMirror.Editor> {
       return;
     }
 
+    this.completionCache = completions;
     const bestCompletions = this._getFilteredCompletions(this.token.text, completions);
 
     let start = this.token.start;
     if (/^\W$/.test(this.token.text)) {
       // Special case for completion on the completion trigger itself, the completion goes after
       start = this.token.end;
+    }
+
+    // 只有一个并且完全匹配，就不需要提示了
+    if (bestCompletions.length === 1 && bestCompletions[0].label === this.token.text) {
+      return;
     }
 
     this.editor.showHint({
@@ -308,6 +328,19 @@ class CodeMirrorAdapter extends IEditorAdapter<CodeMirror.Editor> {
     this.editor.on('change', changeListener);
     this.editorListeners.change = changeListener;
 
+    // 下面情况会改变文本位置，都会清空缓存
+    // 方向键，回退键，清空缓存
+    this.editor.on('keydown', (cm, event) => {
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Backspace'].indexOf(event.key) !== -1) {
+        this.completionCache = [];
+      }
+    });
+
+    // 鼠标点击，清空缓存
+    this.editor.on('mousedown', () => {
+      this.completionCache = [];
+    });
+
     const self = this;
     this.connectionListeners = {
       hover: this.handleHover.bind(self),
@@ -376,6 +409,21 @@ class CodeMirrorAdapter extends IEditorAdapter<CodeMirror.Editor> {
     };
   }
 
+  private _includeText(text: string, word: string) {
+    let index = -1;
+    const label = text.toLowerCase();
+    const words = word.toLowerCase().split('');
+    for (const w of words) {
+      index = label.indexOf(w, index + 1);
+
+      if (index === -1) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
   private _getFilteredCompletions(
     triggerWord: string,
     items: lsProtocol.CompletionItem[],
@@ -388,7 +436,7 @@ class CodeMirrorAdapter extends IEditorAdapter<CodeMirror.Editor> {
       if (item.filterText && item.filterText.toLowerCase().indexOf(word) === 0) {
         return true;
       } else {
-        return item.label.toLowerCase().indexOf(word) === 0;
+        return this._includeText(item.label, word);
       }
     }).sort((a: lsProtocol.CompletionItem, b: lsProtocol.CompletionItem) => {
       const inA = (a.label.indexOf(triggerWord) === 0) ? -1 : 1;
