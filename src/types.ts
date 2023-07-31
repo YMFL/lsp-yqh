@@ -1,5 +1,5 @@
 import * as lsProtocol from 'vscode-languageserver-protocol';
-import { Location, LocationLink } from 'vscode-languageserver-protocol';
+import {Location, LocationLink} from 'vscode-languageserver-protocol';
 
 export interface IPosition {
   line: number;
@@ -17,13 +17,21 @@ type ConnectionEvent = 'completion' | 'completionResolved' | 'hover' | 'diagnost
 
 export interface ILspConnection {
   on(event: 'completion', callback: (items: lsProtocol.CompletionItem[]) => void): void;
+
   on(event: 'completionResolved', callback: (item: lsProtocol.CompletionItem) => void): void;
+
   on(event: 'hover', callback: (hover: lsProtocol.Hover) => void): void;
+
   on(event: 'diagnostic', callback: (diagnostic: lsProtocol.PublishDiagnosticsParams) => void): void;
+
   on(event: 'highlight', callback: (highlights: lsProtocol.DocumentHighlight[]) => void): void;
+
   on(event: 'signature', callback: (signatures: lsProtocol.SignatureHelp) => void): void;
+
   on(event: 'goTo', callback: (location: Location | Location[] | LocationLink[] | null) => void): void;
+
   on(event: 'error', callback: (error: any) => void): void;
+
   on(event: 'logging', callback: (log: any) => void): void;
 
   off(event: ConnectionEvent, listener: (arg: any) => void): void;
@@ -38,14 +46,17 @@ export interface ILspConnection {
    * The initialize request tells the server which options the client supports
    */
   sendInitialize(): void;
+
   /**
    * Sends the full text of the document to the server
    */
   sendChange(): void;
+
   /**
    * Requests additional information for a particular character
    */
   getHoverTooltip(position: IPosition): void;
+
   /**
    * Request possible completions from the server
    */
@@ -54,34 +65,42 @@ export interface ILspConnection {
     token: ITokenInfo,
     triggerCharacter?: string,
     triggerKind?: lsProtocol.CompletionTriggerKind,
+    statementRange?: any,
   ): void;
+
   /**
    * If the server returns incomplete information for completion items, more information can be requested
    */
   getDetailedCompletion(item: lsProtocol.CompletionItem): void;
+
   /**
    * Request possible signatures for the current method
    */
   getSignatureHelp(position: IPosition): void;
+
   /**
    * Request all matching symbols in the document scope
    */
   getDocumentHighlights(position: IPosition): void;
+
   /**
    * Request a link to the definition of the current symbol. The results will not be displayed
    * unless they are within the same file URI
    */
   getDefinition(position: IPosition): void;
+
   /**
    * Request a link to the type definition of the current symbol. The results will not be displayed
    * unless they are within the same file URI
    */
   getTypeDefinition(position: IPosition): void;
+
   /**
    * Request a link to the implementation of the current symbol. The results will not be displayed
    * unless they are within the same file URI
    */
   getImplementation(position: IPosition): void;
+
   /**
    * Request a link to all references to the current symbol. The results will not be displayed
    * unless they are within the same file URI
@@ -112,6 +131,7 @@ export interface ILspConnection {
   // foldingRange
 
   getLanguageCompletionCharacters(): string[];
+
   getLanguageSignatureCharacters(): string[];
 
   getDocumentUri(): string;
@@ -120,14 +140,17 @@ export interface ILspConnection {
    * Does the server support go to definition?
    */
   isDefinitionSupported(): boolean;
+
   /**
    * Does the server support go to type definition?
    */
   isTypeDefinitionSupported(): boolean;
+
   /**
    * Does the server support go to implementation?
    */
   isImplementationSupported(): boolean;
+
   /**
    * Does the server support find all references?
    */
@@ -215,9 +238,9 @@ export interface ITextEditorOptions {
    * Defaults to true.
    */
   quickSuggestions?: boolean | {
-      other: boolean;
-      comments: boolean;
-      strings: boolean;
+    other: boolean;
+    comments: boolean;
+    strings: boolean;
   };
   /**
    * Quick suggestions show delay (in ms)
@@ -259,7 +282,8 @@ export interface ILspOptions {
  * and will send messages over the connection and display responses in the editor
  */
 export abstract class IEditorAdapter<T> {
-  constructor(connection: ILspConnection, options: ITextEditorOptions, editor: T) {}
+  constructor(connection: ILspConnection, options: ITextEditorOptions, editor: T) {
+  }
 
   /**
    * Removes the adapter from the editor and closes the connection
