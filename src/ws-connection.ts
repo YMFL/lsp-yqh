@@ -1,11 +1,10 @@
 import * as rpc from '@sourcegraph/vscode-ws-jsonrpc';
-import {ConsoleLogger} from '@sourcegraph/vscode-ws-jsonrpc';
+import {ConsoleLogger, CancellationTokenSource} from '@sourcegraph/vscode-ws-jsonrpc';
 import * as events from 'events';
 import * as lsProtocol from 'vscode-languageserver-protocol';
 import {LocationLink, ServerCapabilities} from 'vscode-languageserver-protocol';
 import {registerServerCapability, unregisterServerCapability} from './server-capability-registration';
 import {ILspConnection, ILspOptions, IPosition, ITokenInfo} from './types';
-
 interface IFilesServerClientCapabilities {
   /* ... all fields from the base ClientCapabilities ... */
 
@@ -29,6 +28,7 @@ class LspWsConnection extends events.EventEmitter implements ILspConnection {
   private serverCapabilities: lsProtocol.ServerCapabilities;
   private documentVersion = 0;
   private connection: rpc.MessageConnection;
+  private cancelToken: any = null;
 
   constructor(options: ILspOptions) {
     super();
@@ -191,6 +191,7 @@ class LspWsConnection extends events.EventEmitter implements ILspConnection {
       //   settings: {},
       // });
       this.connection.sendNotification('textDocument/didOpen', textDocumentMessage);
+
       this.sendChange();
     }, (e) => {
     });
@@ -259,6 +260,12 @@ class LspWsConnection extends events.EventEmitter implements ILspConnection {
       return;
     }
 
+    if (this.cancelToken) {
+      this.cancelToken.cancel();
+    }
+
+    this.cancelToken = new CancellationTokenSource();
+
     this.connection.sendRequest('textDocument/completion', {
       textDocument: {
         uri: this.documentInfo.documentUri,
@@ -271,7 +278,9 @@ class LspWsConnection extends events.EventEmitter implements ILspConnection {
         triggerKind: triggerKind || lsProtocol.CompletionTriggerKind.Invoked,
         triggerCharacter,
       },
-    } as lsProtocol.CompletionParams).then((params: lsProtocol.CompletionList | lsProtocol.CompletionItem[] | null) => {
+    } as lsProtocol.CompletionParams,
+      this.cancelToken.token).then((params: lsProtocol.CompletionList | lsProtocol.CompletionItem[] | null) => {
+      this.cancelToken = null;
       if (!params) {
         this.emit('completion', params);
         return;
