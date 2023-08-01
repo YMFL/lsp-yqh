@@ -1,10 +1,10 @@
 import * as rpc from '@sourcegraph/vscode-ws-jsonrpc';
-import {ConsoleLogger} from '@sourcegraph/vscode-ws-jsonrpc';
+import { ConsoleLogger } from '@sourcegraph/vscode-ws-jsonrpc';
 import * as events from 'events';
 import * as lsProtocol from 'vscode-languageserver-protocol';
-import {CancellationTokenSource, LocationLink, ServerCapabilities} from 'vscode-languageserver-protocol';
-import {registerServerCapability, unregisterServerCapability} from './server-capability-registration';
-import {ILspConnection, ILspOptions, IPosition, ITokenInfo} from './types';
+import { CancellationTokenSource, LocationLink, ServerCapabilities } from 'vscode-languageserver-protocol';
+import { registerServerCapability, unregisterServerCapability } from './server-capability-registration';
+import { ILspConnection, ILspOptions, IPosition, ITokenInfo } from './types';
 
 interface IFilesServerClientCapabilities {
   /* ... all fields from the base ClientCapabilities ... */
@@ -30,6 +30,7 @@ class LspWsConnection extends events.EventEmitter implements ILspConnection {
   private documentVersion = 0;
   private connection: rpc.MessageConnection;
   private cancelToken: rpc.CancellationTokenSource;
+  private currentCompletionParamsJson: string;
 
   constructor(options: ILspOptions) {
     super();
@@ -260,63 +261,47 @@ class LspWsConnection extends events.EventEmitter implements ILspConnection {
     if (!(this.serverCapabilities && this.serverCapabilities.completionProvider)) {
       return;
     }
+
+    const requestParams = {
+      textDocument: {
+        uri: this.documentInfo.documentUri,
+      },
+      position: {
+        line: location.line,
+        character: location.ch,
+      },
+      context: {
+        triggerKind: triggerKind || lsProtocol.CompletionTriggerKind.Invoked,
+        triggerCharacter: statementRange ? null : triggerCharacter,
+        statementRange,
+      },
+    };
+
     if (this.cancelToken) {
       this.cancelToken.cancel();
     }
 
     this.cancelToken = new CancellationTokenSource();
+    this.currentCompletionParamsJson = JSON.stringify(requestParams);
 
-    if (statementRange) {
-      this.connection.sendRequest('textDocument/completion', {
-        textDocument: {
-          uri: this.documentInfo.documentUri,
-        },
-        position: {
-          line: location.line,
-          character: location.ch,
-        },
-        context: {
-          triggerKind: triggerKind || lsProtocol.CompletionTriggerKind.Invoked,
-          statementRange,
-        },
-      } as lsProtocol.CompletionParams,
-      this.cancelToken)
-        .then((params: lsProtocol.CompletionList | lsProtocol.CompletionItem[] | null) => {
-          this.cancelToken = null;
-          console.log(params);
-          if (!params) {
-            this.emit('completion', params);
-            return;
-          }
-          this.emit('completion', 'items' in params ? params.items : params);
-        });
+    // 请求前先将completion隐藏
+    this.emit('hideCompletion');
+    this.connection.sendRequest('textDocument/completion',
+      requestParams as lsProtocol.CompletionParams,
+      this.cancelToken.token).then((params: lsProtocol.CompletionList | lsProtocol.CompletionItem[] | null) => {
+        // 如果当前的params和请求的params不同，不触发completion
+        this.cancelToken = null;
 
-    } else {
+        if (this.currentCompletionParamsJson !== JSON.stringify(requestParams)) {
+          return;
+        }
 
-      this.connection.sendRequest('textDocument/completion', {
-        textDocument: {
-          uri: this.documentInfo.documentUri,
-        },
-        position: {
-          line: location.line,
-          character: location.ch,
-        },
-        context: {
-          triggerKind: triggerKind || lsProtocol.CompletionTriggerKind.Invoked,
-          triggerCharacter,
-        },
-      } as lsProtocol.CompletionParams,
-      this.cancelToken)
-        .then((params: lsProtocol.CompletionList | lsProtocol.CompletionItem[] | null) => {
-          this.cancelToken = null;
-          if (!params) {
-            this.emit('completion', params);
-            return;
-          }
-          this.emit('completion', 'items' in params ? params.items : params);
-        });
-    }
-
+        if (!params) {
+          this.emit('completion', params);
+          return;
+        }
+        this.emit('completion', 'items' in params ? params.items : params);
+      });
   }
 
   public getDetailedCompletion(completionItem: lsProtocol.CompletionItem) {

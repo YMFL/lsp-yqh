@@ -15,7 +15,6 @@ class CodeMirrorAdapter extends IEditorAdapter<CodeMirror.Editor> {
   public options: ITextEditorOptions;
   public editor: CodeMirror.Editor;
   public connection: ILspConnection;
-  public completionCache: any[];
 
   private hoverMarker: CodeMirror.TextMarker;
   private signatureWidget: CodeMirror.LineWidget;
@@ -35,7 +34,6 @@ class CodeMirrorAdapter extends IEditorAdapter<CodeMirror.Editor> {
     this.connection = connection;
     this.options = getFilledDefaults(options);
     this.editor = editor;
-    this.completionCache = [];
 
     this.debouncedGetHover = debounce((position: IPosition) => {
       this.connection.getHoverTooltip(position);
@@ -91,18 +89,6 @@ class CodeMirrorAdapter extends IEditorAdapter<CodeMirror.Editor> {
     const lines = code.split('\n');
     const line = lines[location.line];
     const typedCharacter = line[location.ch - 1];
-
-    // 如果输入是分隔符，清空缓存
-    const splitCharacters = [' ', ';', ',', '.'];
-    if (splitCharacters.includes(typedCharacter) || !typedCharacter) {
-      this.completionCache = [];
-    }
-
-    this.token = this._getTokenEndingAtPosition(code, location, splitCharacters);
-
-    if (this.completionCache.some((c) => this._includeText(c.label, this.token.text))) {
-      return this.handleCompletion(this.completionCache);
-    }
 
     if (typeof typedCharacter === 'undefined') {
       // Line was cleared
@@ -192,7 +178,6 @@ class CodeMirrorAdapter extends IEditorAdapter<CodeMirror.Editor> {
       return;
     }
 
-    this.completionCache = completions;
     const bestCompletions = this._getFilteredCompletions(this.token.text, completions);
 
     let start = this.token.start;
@@ -328,24 +313,14 @@ class CodeMirrorAdapter extends IEditorAdapter<CodeMirror.Editor> {
     this.editor.on('change', changeListener);
     this.editorListeners.change = changeListener;
 
-    // 下面情况会改变文本位置，都会清空缓存
-    // 方向键，回退键，清空缓存
-    this.editor.on('keydown', (cm, event) => {
-      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Backspace'].indexOf(event.key) !== -1) {
-        this.completionCache = [];
-      }
-    });
-
-    // 鼠标点击，清空缓存
-    this.editor.on('mousedown', () => {
-      this.completionCache = [];
-    });
-
     const self = this;
     this.connectionListeners = {
       hover: this.handleHover.bind(self),
       highlight: this.handleHighlight.bind(self),
       completion: this.handleCompletion.bind(self),
+      hideCompletion: () => {
+        (this.editor as any).closeHint();
+      },
       signature: this.handleSignature.bind(self),
       diagnostic: this.handleDiagnostic.bind(self),
       goTo: this.handleGoTo.bind(self),
